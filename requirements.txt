@@ -1,0 +1,15 @@
+duckdb==0.10.3
+yfinance==0.2.40
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.0
+plotly==5.22.0
+streamlit==1.35.0
+lightgbm==4.3.0
+torch==2.3.0
+torch-geometric==2.5.3
+transformers==4.41.2
+cvxpy==1.5.0
+scikit-learn==1.5.0
+statsmodels==0.14.2
+pandas-datareader==0.10.0
