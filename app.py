@@ -122,7 +122,43 @@ elif view == "Portfolio":
 
 elif view == "Risk & Factors":
     st.title("Risk & Factors")
-    st.info("Coming in V2 — VaR, ES, Fama-French 3-factor.")
+    from src.backtest import walk_forward_backtest
+    from src.signals import (load_returns_wide, compute_momentum,
+                             compute_mean_reversion, cross_sectional_zscore,
+                             composite_signal)
+    from src.risk import (historical_var, expected_shortfall,
+                          load_ff3_factors, ff3_regression)
+
+    with st.spinner("Running backtest + risk analysis..."):
+        ret_wide = load_returns_wide(con)
+        mom_z = cross_sectional_zscore(compute_momentum(ret_wide))
+        rev_z = cross_sectional_zscore(compute_mean_reversion(ret_wide))
+        comp_z = composite_signal({"momentum": mom_z, "mean_rev": rev_z})
+        backtest = walk_forward_backtest(comp_z, ret_wide)
+        port_rets = backtest["portfolio_return"]
+
+        var_99 = historical_var(port_rets, 0.99)
+        es_99 = expected_shortfall(port_rets, 0.99)
+
+    st.subheader("Tail Risk (daily returns)")
+    col1, col2 = st.columns(2)
+    col1.metric("Historical VaR 99%", f"{var_99:.2%}")
+    col2.metric("Expected Shortfall 99%", f"{es_99:.2%}")
+
+    st.subheader("Fama-French 3-Factor Exposure")
+    ff3 = load_ff3_factors()
+    if ff3 is not None:
+        port_rets.index = pd.to_datetime(port_rets.index)
+        result = ff3_regression(port_rets, ff3)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Alpha (annualised)", f"{result['alpha_annualised']:.2%}")
+        col2.metric("β Market", f"{result['beta_mkt']:.2f}")
+        col3.metric("R²", f"{result['r_squared']:.2f}")
+        col4, col5 = st.columns(2)
+        col4.metric("β SMB (size)", f"{result['beta_smb']:.2f}")
+        col5.metric("β HML (value)", f"{result['beta_hml']:.2f}")
+    else:
+        st.warning("Could not download Fama-French factors. Check internet connection.")
 
 elif view == "Model Comparison":
     st.title("Model Comparison")
