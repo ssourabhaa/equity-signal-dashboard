@@ -69,6 +69,18 @@ def create_schema(con):
         )
     """)
 
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS weights (
+            rebal_date DATE NOT NULL,
+            ticker VARCHAR NOT NULL,
+            run_id VARCHAR NOT NULL,
+            weight DOUBLE,
+            signal_score DOUBLE,
+            prev_weight DOUBLE,
+            PRIMARY KEY (rebal_date, ticker, run_id)
+        )
+    """)
+
     print("Schema created successfully.")
 
 

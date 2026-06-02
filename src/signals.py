@@ -98,3 +98,58 @@ def write_signals_to_db(raw_df, z_df, rank_df, signal_name, con):
                 float(z),
                 float(rank) if rank else None,
             ])
+
+def compute_mean_reversion(ret_wide):
+    """
+    5-day mean-reversion signal:
+    - Negate 5-day cumulative return
+    - Stocks that fell → positive signal → predict rebound
+    - .shift(1) ensures no look-ahead (we use data up to yesterday)
+    """
+    raw = -ret_wide.rolling(5).sum().shift(1)
+    return raw
+
+
+def sector_neutralise(signal_df, universe_df):
+    """
+    For each stock, subtract its sector's average signal.
+    Result: signal is relative within sector, not absolute across market.
+
+    universe_df: DataFrame with columns ['ticker', 'sector']
+    """
+    sector_map = universe_df.set_index("ticker")["sector"]
+    neutralised = signal_df.copy()
+
+    for date in signal_df.index:
+        row = signal_df.loc[date].dropna()
+        for sector in sector_map.unique():
+            tickers_in_sector = [t for t in row.index
+                                 if sector_map.get(t) == sector]
+            if len(tickers_in_sector) < 2:
+                continue
+            sector_mean = row[tickers_in_sector].mean()
+            neutralised.loc[date, tickers_in_sector] -= sector_mean
+
+    return neutralised
+
+
+def composite_signal(signal_dict, weights=None):
+    """
+    Blend multiple z-scored signals into one composite.
+
+    signal_dict: {'momentum': df, 'mean_rev': df, ...}
+    weights: {'momentum': 0.5, 'mean_rev': 0.5} — equal if None
+    """
+    names = list(signal_dict.keys())
+    if weights is None:
+        weights = {n: 1.0 / len(names) for n in names}
+
+    composite = None
+    for name, df in signal_dict.items():
+        w = weights.get(name, 0)
+        if composite is None:
+            composite = df * w
+        else:
+            composite = composite.add(df * w, fill_value=0)
+
+    return composite

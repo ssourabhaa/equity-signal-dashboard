@@ -88,7 +88,37 @@ if view == "Signal Dashboard":
 
 elif view == "Portfolio":
     st.title("Portfolio")
-    st.info("Coming in V2 — walk-forward backtest, cvxpy optimiser.")
+    from src.backtest import (walk_forward_backtest,
+                              compute_performance_metrics)
+    from src.signals import (load_returns_wide, compute_momentum,
+                             compute_mean_reversion, cross_sectional_zscore,
+                             composite_signal)
+
+    with st.spinner("Running walk-forward backtest..."):
+        ret_wide = load_returns_wide(con)
+        mom_raw = compute_momentum(ret_wide)
+        rev_raw = compute_mean_reversion(ret_wide)
+        mom_z = cross_sectional_zscore(mom_raw)
+        rev_z = cross_sectional_zscore(rev_raw)
+        comp_z = composite_signal({"momentum": mom_z, "mean_rev": rev_z})
+
+        backtest = walk_forward_backtest(comp_z, ret_wide)
+        metrics = compute_performance_metrics(backtest["portfolio_return"])
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Sharpe", f"{metrics['sharpe']:.2f}")
+    col2.metric("Sortino", f"{metrics['sortino']:.2f}")
+    col3.metric("Max Drawdown", f"{metrics['max_drawdown']:.1%}")
+
+    cum_ret = (1 + backtest["portfolio_return"]).cumprod()
+    fig = px.line(cum_ret, title="Cumulative Return — MV Optimised Portfolio")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Drawdown chart
+    peak = cum_ret.expanding().max()
+    drawdown = (cum_ret - peak) / peak
+    fig2 = px.area(drawdown, title="Drawdown", color_discrete_sequence=["#ef4444"])
+    st.plotly_chart(fig2, use_container_width=True)
 
 elif view == "Risk & Factors":
     st.title("Risk & Factors")

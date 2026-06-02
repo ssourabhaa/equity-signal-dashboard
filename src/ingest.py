@@ -17,6 +17,17 @@ UNIVERSE_V1 = [
     ("UPS", "Industrials"), ("DE", "Industrials"),
 ]
 
+UNIVERSE_V2 = UNIVERSE_V1 + [
+    ("TSLA", "Technology"), ("AMD", "Technology"), ("INTC", "Technology"), ("ORCL", "Technology"),
+    ("WFC", "Financials"), ("C", "Financials"), ("AXP", "Financials"), ("BLK", "Financials"),
+    ("MRK", "Healthcare"), ("BMY", "Healthcare"), ("GILD", "Healthcare"), ("CVS", "Healthcare"),
+    ("TGT", "Cons.Discr."), ("LOW", "Cons.Discr."), ("SBUX", "Cons.Discr."), ("GM", "Cons.Discr."),
+    ("GE", "Industrials"), ("LMT", "Industrials"), ("RTX", "Industrials"), ("BA", "Industrials"),
+    ("XOM", "Energy"), ("CVX", "Energy"), ("COP", "Energy"), ("SLB", "Energy"),
+    ("NEE", "Utilities"), ("DUK", "Utilities"), ("SO", "Utilities"), ("D", "Utilities"),
+    ("AMT", "Real Estate"), ("PLD", "Real Estate"), ("EQIX", "Real Estate"), ("PSA", "Real Estate"),
+]
+
 START_DATE = "2014-01-01"
 
 
