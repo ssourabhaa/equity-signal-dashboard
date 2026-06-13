@@ -180,4 +180,53 @@ elif view == "Risk & Factors":
 
 elif view == "Model Comparison":
     st.title("Model Comparison")
-    st.info("Coming in V4 — LightGBM vs LSTM vs GNN covariance vs FinBERT.")
+    st.caption("Sample covariance vs GNN-learned covariance")
+
+    import os
+    from src.backtest import compute_performance_metrics
+
+    if not (os.path.exists("data/bt_sample.parquet") and
+            os.path.exists("data/bt_gnn.parquet")):
+        st.warning("Run `python -m scripts.compare_cov` first.")
+        st.stop()
+
+    bt_sample = pd.read_parquet("data/bt_sample.parquet")
+    bt_gnn = pd.read_parquet("data/bt_gnn.parquet")
+
+    m_sample = compute_performance_metrics(bt_sample["portfolio_return"])
+    m_gnn = compute_performance_metrics(bt_gnn["portfolio_return"])
+
+    st.subheader("Performance Comparison")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Sharpe",  f"{m_gnn['sharpe']:.3f}",
+                f"{m_gnn['sharpe'] - m_sample['sharpe']:+.3f} vs sample")
+    col2.metric("Sortino", f"{m_gnn['sortino']:.3f}",
+                f"{m_gnn['sortino'] - m_sample['sortino']:+.3f} vs sample")
+    col3.metric("Max Drawdown", f"{m_gnn['max_drawdown']:.2%}",
+                f"{(m_gnn['max_drawdown'] - m_sample['max_drawdown'])*100:+.2f} ppts")
+
+    # Side-by-side metrics table
+    st.subheader("Full Comparison")
+    table = pd.DataFrame({
+        "Metric": ["Sharpe", "Sortino", "Max Drawdown"],
+        "Sample Cov": [m_sample["sharpe"], m_sample["sortino"], f"{m_sample['max_drawdown']:.2%}"],
+        "GNN Cov":    [m_gnn["sharpe"], m_gnn["sortino"], f"{m_gnn['max_drawdown']:.2%}"],
+    })
+    st.dataframe(table, hide_index=True)
+
+    # Cumulative return overlay
+    cum_sample = (1 + bt_sample["portfolio_return"]).cumprod()
+    cum_gnn = (1 + bt_gnn["portfolio_return"]).cumprod()
+
+    overlay = pd.DataFrame({"Sample Cov": cum_sample, "GNN Cov": cum_gnn})
+    fig = px.line(overlay, title="Cumulative Return — Sample vs GNN Covariance")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Drawdown overlay
+    peak_s, peak_g = cum_sample.expanding().max(), cum_gnn.expanding().max()
+    dd = pd.DataFrame({
+        "Sample Cov": (cum_sample - peak_s) / peak_s,
+        "GNN Cov":    (cum_gnn - peak_g) / peak_g,
+    })
+    fig2 = px.line(dd, title="Drawdown — Sample vs GNN Covariance")
+    st.plotly_chart(fig2, use_container_width=True)

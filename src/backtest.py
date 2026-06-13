@@ -53,9 +53,16 @@ def mv_optimise(signal_scores, ret_window, gamma=1.0, custom_cov=None):
     return pd.Series(w.value, index=tickers)
 
 
-def walk_forward_backtest(composite_z, ret_wide, cost_bps=5, lookback=252, gamma=1.0):
+def walk_forward_backtest(composite_z, ret_wide, cost_bps=5, lookback=252,
+                          gamma=1.0, cov_func=None):
     """
     Monthly walk-forward backtest with transaction costs.
+
+    cov_func: optional callable taking ret_window (DataFrame) and returning
+              a covariance matrix (numpy array, ordered to match ret_window.columns).
+              If None, falls back to sample covariance inside mv_optimise.
+
+    Returns: pd.DataFrame with columns [date, portfolio_return]
     """
     results = []
     prev_w = pd.Series(dtype=float)
@@ -67,7 +74,13 @@ def walk_forward_backtest(composite_z, ret_wide, cost_bps=5, lookback=252, gamma
         signal = composite_z.loc[rebal_date].dropna()
         ret_window = ret_wide.loc[:rebal_date].tail(lookback)
 
-        weights = mv_optimise(signal, ret_window, gamma=gamma)
+        # If a custom cov function is provided, compute it for this window
+        custom_cov = None
+        if cov_func is not None:
+            tickers_for_cov = signal.index.intersection(ret_window.columns)
+            custom_cov = cov_func(ret_window[tickers_for_cov])
+
+        weights = mv_optimise(signal, ret_window, gamma=gamma, custom_cov=custom_cov)
 
         common = weights.index.intersection(prev_w.index)
         turnover = (weights[common] - prev_w[common]).abs().sum()

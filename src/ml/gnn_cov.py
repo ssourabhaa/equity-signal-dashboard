@@ -145,4 +145,8 @@ def get_gnn_covariance(model, ret_window):
         graph = build_graph(ret_window).to(device)
         embeddings = model(graph)
         cov_tensor = embeddings_to_covariance(embeddings)
-    return cov_tensor.cpu().numpy()
+
+    cov = cov_tensor.cpu().numpy()
+    # Force exact symmetry — fixes float rounding from torch → numpy
+    cov = (cov + cov.T) / 2
+    return cov
