@@ -30,61 +30,79 @@ view = st.sidebar.radio(
 # ── VIEW 1: Signal Dashboard ──────────────────────────────────────────────────
 if view == "Signal Dashboard":
     st.title("Signal Dashboard")
-    st.caption("Momentum 12-1 signal · Spearman IC analysis")
+    st.caption("4 signals · Spearman IC analysis")
 
-    with st.spinner("Loading returns and computing signal..."):
+    from src.signals import compute_ic_series
+
+    signal_choice = st.sidebar.selectbox(
+        "Signal",
+        ["momentum", "mean_rev", "lgbm", "lstm"]
+    )
+
+    with st.spinner("Loading signal and computing IC..."):
         ret_wide = load_returns_wide(con)
-        mom_raw = compute_momentum(ret_wide)
-        mom_z = cross_sectional_zscore(mom_raw)
-        mom_rank = mom_z.rank(axis=1, pct=True)
 
-        # Compute IC series (21-day forward return horizon)
-        ic_series = compute_ic_series(mom_z, ret_wide, horizon=21)
-        ic_series["rolling_ic"] = ic_series["ic"].rolling(63).mean()  # 3-month rolling
+        df = con.execute("""
+            SELECT date, ticker, zscore
+            FROM signals
+            WHERE signal_name = ?
+            ORDER BY date
+        """, [signal_choice]).df()
 
-    # Metric cards
+        if df.empty:
+            st.warning(f"No data for signal '{signal_choice}'. Run scripts/train_ml_signals.py first.")
+            st.stop()
+
+        sig_wide = df.pivot(index="date", columns="ticker", values="zscore")
+        sig_wide.index = pd.to_datetime(sig_wide.index)
+
+        ic_series = compute_ic_series(sig_wide, ret_wide, horizon=21)
+        ic_series["rolling_ic"] = ic_series["ic"].rolling(63).mean()
+
     col1, col2, col3 = st.columns(3)
     mean_ic = ic_series["ic"].mean()
     icir = ic_series["ic"].mean() / ic_series["ic"].std()
     col1.metric("Mean IC", f"{mean_ic:.4f}")
     col2.metric("ICIR", f"{icir:.2f}")
-    col3.metric("Signal observations", f"{int(ic_series['ic'].notna().sum())}")
+    col3.metric("Observations", f"{int(ic_series['ic'].notna().sum())}")
 
-    # Rolling IC chart
     fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(
-        x=ic_series.index, y=ic_series["ic"],
-        mode="lines", name="Daily IC",
-        line=dict(color="#cbd5e1", width=0.8)
-    ))
-    fig1.add_trace(go.Scatter(
-        x=ic_series.index, y=ic_series["rolling_ic"],
-        mode="lines", name="63-day rolling IC",
-        line=dict(color="#3b82f6", width=2)
-    ))
+    fig1.add_trace(go.Scatter(x=ic_series.index, y=ic_series["ic"],
+                              mode="lines", name="Daily IC",
+                              line=dict(color="#cbd5e1", width=0.8)))
+    fig1.add_trace(go.Scatter(x=ic_series.index, y=ic_series["rolling_ic"],
+                              mode="lines", name="63-day rolling IC",
+                              line=dict(color="#3b82f6", width=2)))
     fig1.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig1.update_layout(title="Rolling IC — Momentum 12-1", height=350)
+    fig1.update_layout(title=f"Rolling IC — {signal_choice}", height=350)
     st.plotly_chart(fig1, use_container_width=True)
 
-    # IC histogram
-    fig2 = px.histogram(
-        ic_series.dropna(), x="ic", nbins=40,
-        title="IC Distribution",
-        color_discrete_sequence=["#6366f1"]
-    )
+    fig2 = px.histogram(ic_series.dropna(), x="ic", nbins=40,
+                       title="IC Distribution",
+                       color_discrete_sequence=["#6366f1"])
     fig2.add_vline(x=0, line_dash="dash", line_color="red")
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Latest z-scores (bar chart)
-    latest = mom_z.dropna(how="all").iloc[-1].sort_values(ascending=False)
-    fig3 = px.bar(
-        x=latest.index, y=latest.values,
-        title="Latest Momentum Z-Score by Ticker",
-        color=latest.values,
-        color_continuous_scale="RdYlGn",
-        labels={"x": "Ticker", "y": "Z-Score"}
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.subheader("Signal Benchmark — All 4 Signals")
+    benchmark_rows = []
+    for name in ["momentum", "mean_rev", "lgbm", "lstm"]:
+        df_s = con.execute("""
+            SELECT date, ticker, zscore FROM signals
+            WHERE signal_name = ? ORDER BY date
+        """, [name]).df()
+        if df_s.empty:
+            continue
+        s_wide = df_s.pivot(index="date", columns="ticker", values="zscore")
+        s_wide.index = pd.to_datetime(s_wide.index)
+        ic = compute_ic_series(s_wide, ret_wide, horizon=21)["ic"]
+        benchmark_rows.append({
+            "Signal": name,
+            "Mean IC": ic.mean(),
+            "ICIR": ic.mean() / ic.std() if ic.std() > 0 else 0,
+            "Type": "Classical" if name in ("momentum", "mean_rev") else "ML",
+        })
+    bench_df = pd.DataFrame(benchmark_rows)
+    st.dataframe(bench_df.style.format({"Mean IC": "{:.4f}", "ICIR": "{:.2f}"}))
 
 elif view == "Portfolio":
     st.title("Portfolio")
