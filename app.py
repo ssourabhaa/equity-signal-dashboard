@@ -39,6 +39,15 @@ if view == "Signal Dashboard":
         ["momentum", "mean_rev", "lgbm", "lstm", "finbert_sentiment"]
     )
 
+    universe_tickers = con.execute(
+        "SELECT ticker FROM universe ORDER BY ticker"
+    ).df()["ticker"].tolist()
+
+    stock_choice = st.sidebar.selectbox(
+        "Company / Stock",
+        ["All stocks"] + universe_tickers,
+    )
+
     with st.spinner("Loading signal and computing IC..."):
         ret_wide = load_returns_wide(con)
 
@@ -65,6 +74,31 @@ if view == "Signal Dashboard":
         col1.metric("Mean IC", f"{mean_ic:.4f}")
         col2.metric("ICIR", f"{icir:.2f}")
         col3.metric("Observations", f"{int(ic_series['ic'].notna().sum())}")
+
+        if stock_choice != "All stocks":
+            st.subheader(f"{stock_choice} — {signal_choice} signal")
+            if stock_choice in sig_wide.columns:
+                stock_series = sig_wide[stock_choice].dropna()
+                latest_row = sig_wide.dropna(how="all").iloc[-1]
+                latest_val = stock_series.iloc[-1] if not stock_series.empty else float("nan")
+                pct_rank = latest_row.rank(pct=True).get(stock_choice, float("nan")) * 100
+
+                c1, c2 = st.columns(2)
+                c1.metric("Latest z-score", f"{latest_val:.2f}")
+                c2.metric("Latest rank (percentile)", f"{pct_rank:.0f}%")
+
+                fig_stock = go.Figure()
+                fig_stock.add_trace(go.Scatter(
+                    x=stock_series.index, y=stock_series.values,
+                    mode="lines", name=f"{stock_choice} z-score",
+                    line=dict(color="#10b981", width=1.5)))
+                fig_stock.add_hline(y=0, line_dash="dash", line_color="gray")
+                fig_stock.update_layout(
+                    title=f"{stock_choice} — {signal_choice} z-score over time",
+                    height=300)
+                st.plotly_chart(fig_stock, use_container_width=True)
+            else:
+                st.info(f"No '{signal_choice}' signal data for {stock_choice}.")
 
         fig1 = go.Figure()
         fig1.add_trace(go.Scatter(x=ic_series.index, y=ic_series["ic"],
