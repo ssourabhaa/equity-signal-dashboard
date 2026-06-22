@@ -2,6 +2,9 @@
 Build FinBERT sentiment signal from the FNSPID dataset (CC BY-NC 4.0 — non-commercial).
 Filters to your universe, scores each headline, aggregates per (date, ticker), writes to DB.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import time
 from huggingface_hub import hf_hub_download
