@@ -10,6 +10,27 @@ from src.signals import (
 
 st.set_page_config(page_title="Equity Signal Dashboard", layout="wide")
 
+def check_password():
+    """Simple shared-password gate. Returns True if user is authenticated."""
+    APP_PASSWORD = "12345"  
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.title("Equity Signal Dashboard")
+    st.caption("Enter the password to continue.")
+    pw = st.text_input("Password", type="password")
+
+    if st.button("Sign in"):
+        if pw == APP_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    return False
+
+if not check_password():
+    st.stop()
 
 @st.cache_resource
 def get_con():
