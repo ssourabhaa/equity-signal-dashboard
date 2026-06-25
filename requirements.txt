@@ -13,3 +13,4 @@ cvxpy==1.5.0
 scikit-learn==1.5.0
 statsmodels==0.14.2
 pandas-datareader==0.10.0
+bcrypt>=4.0.0

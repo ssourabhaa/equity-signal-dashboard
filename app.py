@@ -7,30 +7,58 @@ from src.signals import (
     load_returns_wide, compute_momentum,
     cross_sectional_zscore, compute_ic_series
 )
+from src.auth import init_users_table, signup, login
+
+init_users_table()
 
 st.set_page_config(page_title="Equity Signal Dashboard", layout="wide")
 
-def check_password():
-    """Simple shared-password gate. Returns True if user is authenticated."""
-    APP_PASSWORD = "12345"  
-
-    if st.session_state.get("authenticated"):
-        return True
-
+def _login_page() -> None:
     st.title("Equity Signal Dashboard")
-    st.caption("Enter the password to continue.")
-    pw = st.text_input("Password", type="password")
+    st.caption("Sign in or create an account to continue.")
 
-    if st.button("Sign in"):
-        if pw == APP_PASSWORD:
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("Incorrect password.")
-    return False
+    tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
-if not check_password():
-    st.stop()
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email", key="login_email")
+            pw = st.text_input("Password", type="password", key="login_pw")
+            submitted = st.form_submit_button("Log in")
+        if submitted:
+            ok, msg = login(email, pw)
+            if ok:
+                st.session_state["user_email"] = email.strip().lower()
+                st.rerun()
+            else:
+                st.error(msg)
+
+    with tab_signup:
+        with st.form("signup_form"):
+            email = st.text_input("Email", key="signup_email")
+            pw = st.text_input("Password (min 8 chars)", type="password", key="signup_pw")
+            pw2 = st.text_input("Confirm password", type="password", key="signup_pw2")
+            submitted = st.form_submit_button("Create account")
+        if submitted:
+            if pw != pw2:
+                st.error("Passwords do not match.")
+            else:
+                ok, msg = signup(email, pw)
+                (st.success if ok else st.error)(msg)
+
+
+def _require_login() -> None:
+    if "user_email" not in st.session_state:
+        _login_page()
+        st.stop()
+
+
+_require_login()
+
+with st.sidebar:
+    st.caption(f"Signed in as **{st.session_state['user_email']}**")
+    if st.button("Log out"):
+        st.session_state.clear()
+        st.rerun()
 
 @st.cache_resource
 def get_con():
