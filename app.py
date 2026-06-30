@@ -1,3 +1,5 @@
+from unicodedata import name
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -93,14 +95,15 @@ def compute_signal_benchmark():
     from src.signals import compute_ic_series
     ret = load_returns_cached()
     type_map = {
-        "momentum": "Classical",
-        "mean_rev": "Classical",
-        "lgbm": "ML",
-        "lstm": "ML",
-        "finbert_sentiment": "NLP/SOTA",
-    }
+    "momentum": "Classical",
+    "mean_rev": "Classical",
+    "lgbm": "ML",
+    "lstm": "ML",
+    "finbert_sentiment": "NLP/SOTA",
+    "gemini_news": "LLM/SOTA",
+}
     rows = []
-    for name in ["momentum", "mean_rev", "lgbm", "lstm", "finbert_sentiment"]:
+    for name in ["momentum", "mean_rev", "lgbm", "lstm", "finbert_sentiment", "gemini_news"]:
         df_s = con.execute("""
             SELECT date, ticker, zscore FROM signals
             WHERE signal_name = ? ORDER BY date
@@ -110,8 +113,17 @@ def compute_signal_benchmark():
         s_wide = df_s.pivot(index="date", columns="ticker", values="zscore")
         s_wide.index = pd.to_datetime(s_wide.index)
 
-        if len(s_wide) > 30:
-            ic = compute_ic_series(s_wide, ret, horizon=21)["ic"]
+        # gemini_news has a short window (~3 weeks) so we relax the threshold
+        # and use a shorter forward-return horizon so IC is actually computable.
+        if name == "gemini_news":
+            min_dates = 15
+            horizon_days = 5
+        else:
+            min_dates = 30
+            horizon_days = 21
+
+        if len(s_wide) > min_dates:
+            ic = compute_ic_series(s_wide, ret, horizon=horizon_days)["ic"]
             mean_ic = ic.mean()
             icir = ic.mean() / ic.std() if ic.std() > 0 else 0
         else:
@@ -169,9 +181,9 @@ if view == "Signal Dashboard":
     st.caption("4 signals · Spearman IC analysis")
 
     signal_choice = st.sidebar.selectbox(
-        "Signal",
-        ["momentum", "mean_rev", "lgbm", "lstm", "finbert_sentiment"]
-    )
+    "Signal",
+    ["momentum", "mean_rev", "lgbm", "lstm", "finbert_sentiment", "gemini_news"]
+)
 
     with st.spinner("Loading signal and computing IC..."):
         ret_wide = load_returns_cached()
@@ -233,7 +245,10 @@ if view == "Signal Dashboard":
         st.subheader("Signal Benchmark — All Signals")
         bench_df = compute_signal_benchmark()
         st.dataframe(bench_df.style.format({"Mean IC": "{:.4f}", "ICIR": "{:.2f}"}))
-        st.caption("Note: FinBERT sentiment shows N/A because yfinance.news only returns ~2 weeks of recent headlines — there's no historical depth to compute a Spearman IC. See README for limitations.")
+        st.caption(
+    "Gemini News sentiment covers 10 tickers over 3 weeks — its IC is computed from a small but real time series. "
+    "Both can be expanded with more API budget / time window. See README for limitations."
+)
 
 elif view == "Portfolio":
     st.title("Portfolio")

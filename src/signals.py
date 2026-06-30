@@ -71,6 +71,8 @@ def compute_ic_series(signal_df, returns_df, horizon=21):
         ic, _ = stats.spearmanr(sig[common], fwd[common])
         ic_series.append({"date": date, "ic": ic})
 
+    if not ic_series:
+        return pd.DataFrame(columns=["ic"]).set_index(pd.DatetimeIndex([], name="date"))
     return pd.DataFrame(ic_series).set_index("date")
 
 
